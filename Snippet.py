@@ -5,6 +5,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import argparse
 
 #Globals
 FFT_SIZE=2048 #2^11
@@ -13,9 +14,6 @@ SAMPLING_RATE = 22050
 N_MELS= 128
 N_MFCCS=12
 
-#audio_files to be extracted
-audio_file = ["digital_love.mp3", "pequenas_cosas.mp3","heartbeat.mp3","mindless.ogg","sines.ogg"]
-#audio_file = ["sines.ogg"]
 
 def normalize(X):
     X += np.abs(X.min())
@@ -39,8 +37,8 @@ def process_features(file):
     #Load audio
     try:
         logging.info("Loading file {}".format(os.path.basename(file)))
-        audio, sr=librosa.load(file,sr=SAMPLING_RATE)
-    except Exeption as e:
+        audio, sr=librosa.load("audios/{}".format(file),sr=SAMPLING_RATE)
+    except exception as e:
         logging.info("Couldn't load file {}".format(os.path.basename(file)))
         logging.info("Error: {}".format(e))
         return
@@ -132,8 +130,22 @@ def process_features(file):
         logging.info("Failed Beat Estimation")
         logging.info("Error: {}".format(e))
 
-    plt.savefig("{}.png".format(file), box_inches='tight')
-#Setup logger
-logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',level=logging.INFO)
-for item in audio_file:
-    process_features(item)
+    plt.savefig("graphs/{}.png".format(file), box_inches='tight')
+
+if __name__ == '__main__':
+    #Setup logger
+    parser = argparse.ArgumentParser(description="Generates a music snippet form a given audio file",
+                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("audio_file",
+                        action="store",
+                        help="Input audio file")
+    parser.add_argument("-D",
+                        action="store_const",
+                        dest="Debug",
+                        const=True,
+                        default=False,
+                        help="Debug mode")
+    args=parser.parse_args()
+    if(args.Debug):
+        logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',level=logging.INFO)
+    process_features(args.audio_file)

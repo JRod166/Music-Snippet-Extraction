@@ -1,0 +1,6 @@
+#!/bin/bash
+
+for filename in audios/*; do
+  file=${filename:7}
+  python Snippet.py $file -D
+done
