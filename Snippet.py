@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import argparse
+import chroma_exp
 from collections import Counter
 from scipy.io import wavfile
 from scipy.spatial import distance
@@ -198,10 +199,13 @@ def find_idxs(sequence, P=1, N=16, L=None,positioning="None"):
     M = len(sequence)
     if L is None:
         L = int(N / 4)
-    cont=0
-    kmeans=KMeans(n_clusters=64).fit(sequence)
+    x=64
+    while(x>=len(sequence)):
+        x=x/2
+    kmeans=KMeans(n_clusters=int(x)).fit(sequence)
     idx=get_indeces(kmeans.labels_)
-    idx=filter(idx,positioning,M)
+    if positioning!=None:
+        idx=filter(idx,positioning,M)
     #print(idx)
 
     return idx
@@ -213,10 +217,18 @@ def find_idxs_chroma(sequence, P=1, N=16, L = None):
     if L is None:
         L = int(N / 4)
     cont=0
-    kmeans=KMeans(n_clusters=64).fit(sequence)
-    idx=get_indeces(kmeans.labels_)
-    idx=filter(idx,positioning,M)
-    #print(idx)
+    patterns=chroma_exp.get_indeces(sequence)
+    pattern_features=[]
+    for i in patterns:
+        pattern_features.append(sequence[i])
+    x=64
+    while(x>=len(pattern_features)):
+        x=x/2
+    kmeans=KMeans(n_clusters=int(x)).fit(pattern_features)
+    idx_pf=get_indeces(kmeans.labels_)
+    idx=[]
+    for i in idx_pf:
+        idx.append(patterns[i])
 
     return idx
 
@@ -247,6 +259,7 @@ def synth_snippet(audio,beats,idxs,N):
     n=len(audio)
     snippet=np.empty(0)
     idxs=subsequent_idxs(idxs)
+    #print(idxs)
     # Create Subsequence
     start_time=beats[int(idxs[0])]
     end_time=beats[int(idxs[1]+(N))]
@@ -289,7 +302,7 @@ def generate_snippet(audio_file,positioning,N=16):
     features["bs_sequenceChroma"]=librosa.util.sync(features["sequenceChroma"].T,
                                               features["beats_idx"],
                                               pad=False).T
-    snippet_idxs=find_idxs(sequence=features["bs_sequenceChroma"],positioning=positioning)
+    snippet_idxs=find_idxs_chroma(sequence=features["bs_sequenceChroma"])
     snippet=synth_snippet(audio,features["beats"],snippet_idxs,N)
     logging.info("Writting snippet for {} - Chroma".format(audio_file))
     wavfile.write("test/{}_Test_Chroma.wav".format(audio_file),SAMPLING_RATE,snippet)
