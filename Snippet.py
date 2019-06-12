@@ -206,6 +206,20 @@ def find_idxs(sequence, P=1, N=16, L=None,positioning="None"):
 
     return idx
 
+def find_idxs_chroma(sequence, P=1, N=16, L = None):
+    assert len(sequence) >= P * N
+
+    M = len(sequence)
+    if L is None:
+        L = int(N / 4)
+    cont=0
+    kmeans=KMeans(n_clusters=64).fit(sequence)
+    idx=get_indeces(kmeans.labels_)
+    idx=filter(idx,positioning,M)
+    #print(idx)
+
+    return idx
+
 def subsequent_idxs(idxs):
     temp_start=idxs[0]
     end=0
@@ -229,22 +243,37 @@ def subsequent_idxs(idxs):
 def synth_snippet(audio,beats,idxs,N):
     logging.info("Synthesizing snippet")
     sr=SAMPLING_RATE
+    fade=2
     n=len(audio)
     snippet=np.empty(0)
     idxs=subsequent_idxs(idxs)
     # Create Subsequence
     start_time=beats[int(idxs[0])]
     end_time=beats[int(idxs[1]+(N))]
-    while(end_time-start_time<20):
+    while(end_time-start_time<18):
         if start_time-N>=0:
             start_time-=N
         if end_time+N<=n:
             end_time+=N
-    while(end_time-start_time>20):
+    while(end_time-start_time>18):
         end_time-=1
-    start_sample=time_to_sample(start_time,sr)
-    end_sample=time_to_sample(end_time,sr)
+    start_sample=time_to_sample(start_time+1,sr)
+    end_sample=time_to_sample(end_time-1,sr)
     subseq_audio = audio[start_sample:end_sample]
+
+    fade_seg_start=time_to_sample(np.max([0,start_time-1]),sr)
+    fade_seg_end=time_to_sample(np.min([n-1,start_time+1]),sr)
+    n_samples=fade_seg_end-fade_seg_start
+    mask=np.arange(n_samples) / float(n_samples)
+    fade_in=audio[fade_seg_start:fade_seg_end]*mask
+
+    fade_seg_start=time_to_sample(np.max([0,end_time-1]),sr)
+    fade_seg_end=time_to_sample(np.min([n-1,end_time+1]),sr)
+    n_samples=fade_seg_end-fade_seg_start
+    mask=1-(np.arange(n_samples) / float(n_samples))
+    fade_out=audio[fade_seg_start:fade_seg_end]*mask
+    subseq_audio=np.concatenate((fade_in,subseq_audio))
+    subseq_audio=np.concatenate((subseq_audio,fade_out))
     return subseq_audio
 
 def generate_snippet(audio_file,positioning,N=16):
