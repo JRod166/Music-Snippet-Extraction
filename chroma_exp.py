@@ -3,13 +3,31 @@ import math
 from math import sqrt
 from math import inf
 
+
 def euclidean_dist(a,b):
+    """Parameters
+    ----------
+    a,b:    array of numbers
+    Returns
+    ----------
+    sqrt(acumulado):    float
+                        dist of a and b
+    """
     acumulado=0.0
     for i in range (0,len(a)):
         acumulado+=(a[i]-b[i])**2
     return sqrt(acumulado)
 
 def longest_patterns(data):
+    """Parameters
+    ----------
+    data:   np.array
+            Chroma features
+    Returns
+    ----------
+    patterns:   np.array
+                patterns with highest length
+    """
     max_value=-float(inf)
     patterns=[]
     for i in data:
@@ -23,6 +41,16 @@ def longest_patterns(data):
     return patterns
 
 def no_overlap(data):
+    """Parameters
+    ----------
+    data:   np.array
+            pattern structure
+            [length [start_pattern1,end_pattern1][start_pattern2,end_pattern2]]
+    Returns
+    ----------
+    indeces:    List
+                List of indeces on patterns
+    """
     indeces=[]
     for i in data:
         for j in range (i[1][0],i[2][0]+1):
@@ -35,6 +63,17 @@ def no_overlap(data):
 
 #error =0.1 --> 90% of similarity
 def get_indeces(data,error=0.1):
+    """Parameters
+    ----------
+    data:   np.array
+            Chroma features
+    error:  float
+            difference of similarity
+    Returns
+    ----------
+    indeces:    array
+                list of indeces from repeated patterns
+    """
     similarity_matrix=[]
     repeated_patterns=[]
     accepted_value=1-error

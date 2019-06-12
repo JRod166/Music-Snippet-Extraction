@@ -13,28 +13,61 @@ from scipy.spatial import distance
 from sklearn.cluster import KMeans
 
 #Globals
-FFT_SIZE=2048 #2^11
-HOP_SIZE=512 #2^6
+FFT_SIZE=2048
+HOP_SIZE=512
 SAMPLING_RATE = 22050
 N_MELS= 128
 N_MFCCS=16
 
 
 def normalize(X):
+    """Parameters
+    ----------
+    X : np.array
+    Returns
+    ----------
+    X : np.array
+        normalized array
+    """
     X += np.abs(X.min())
     X /= X.max()
     return X
 
 
 def time_to_sample(time,sr):
+    """Parameters
+    ----------
+    time:   float>0<len(song)
+    sr:     Sample rate
+    Returns
+    ----------
+    time*sr:    sample time to render
+    """
     return int(time*sr)
 
 def most_frequent(List):
+    """Parameters
+    ----------
+    List:   np.array
+            array of clusters
+    Returns
+    ----------
+    most_common:    int
+                    cluster with the largest amount of data
+    """
     occurence_count = Counter(List)
-    #print(occurence_count)
     return occurence_count.most_common(1)[0][0]
 
 def get_indeces(List):
+    """Parameters
+    ----------
+    List:   np.array
+            array of clusters
+    Returns
+    ----------
+    indeces:    np.array
+                indeces of elements on the biggest cluster
+    """
     indeces=[]
     number=most_frequent(List)
     for i in range(0,len(List)):
@@ -43,6 +76,15 @@ def get_indeces(List):
     return indeces
 
 def compute_beats(y, sr):
+    """Parameters
+    ----------
+    y:  audio file
+    sr: sampling rate
+    Returns
+    ----------
+    beats_idx:      estimated beat event locations in the specified units (default is frame indices)
+    frames_to_time: time (in seconds) of each given frame number: times[i] = frames[i] * hop_length / sr
+    """
 
     logging.info("Estimating Beats...")
     tempo, beats_idx = librosa.beat.beat_track(y=y, sr=sr,
@@ -52,6 +94,19 @@ def compute_beats(y, sr):
 
 
 def process_features(file):
+    """Parameters
+    ----------
+    file:   string
+            audio file
+    Returns
+    ----------
+    features:   dict
+                sequenceMFCC: MFCC features
+                sequenceChroma: Chroma features
+                beats_idx: beat event locations
+                beats: time of each given frame number
+    audio:      loaded audio file
+    """
 
     plt.figure(figsize=(12, 18))
     #Load audio
@@ -103,8 +158,6 @@ def process_features(file):
         plt.colorbar()
         plt.title('MFCC')
 
-        logging.info("MFCC spectrogram: done")
-
         features["sequenceMFCC"] =librosa.feature.mfcc(S=log_S, n_mfcc=N_MFCCS)
         plt.subplot(4,2,5)
         librosa.display.specshow(features["sequenceMFCC"],x_axis="time")
@@ -124,14 +177,11 @@ def process_features(file):
 
         logging.info("Chroma spectrogram: done")
 
-        #Normalize sequence
+        #Normalize sequences
         features["sequenceMFCC"]=normalize(features["sequenceMFCC"])
-
-        #Normalize sequence
         features["sequenceChroma"]=normalize(features["sequenceChroma"])
 
         logging.info("Normalized features: done")
-
         logging.info("Generated spectrograms for {}".format(os.path.basename(file)))
     except Exception as e:
         logging.info("Failed to generate spectrograms for {}".format(os.path.basename(file)))
@@ -139,6 +189,7 @@ def process_features(file):
 
     try:
         onset_env = librosa.onset.onset_strength(y=audio, sr=sr,aggregate=np.median)
+        #Energy curves
         features["beats_idx"],features["beats"] = compute_beats(audio,sr=sr)
         times=librosa.frames_to_time(np.arange(np.abs(D).shape[1]))
         plt.subplot(4,2,7)
@@ -147,7 +198,7 @@ def process_features(file):
         plt.legend(frameon=True, framealpha=0.75)
         plt.gca().xaxis.set_major_formatter(librosa.display.TimeFormatter())
         plt.title('Power Spectrogram')
-        logging.info("Generated beat-track")
+        logging.info("Generated power spectrogram")
 
     except Exception as e:
         logging.info("Failed Beat Estimation")
@@ -156,7 +207,22 @@ def process_features(file):
     plt.savefig("graphs/{}.png".format(file), box_inches='tight')
     return features, audio
 
-def filter(List,positioning,M):
+def filter(List,positioning,M): #recopiles most salient indeces from the selected part of the song
+    """Parameters
+    ----------
+    List:   np.array
+            array of most salient indeces
+    positioning:    string
+                    position weight (beginning,middle,end)
+    M:      audio size
+    Returns
+    ----------
+    List:   np.array
+            input array if can not be filtered
+        or
+    Lista:  np.array
+            filtered indeces
+    """
     third_part=round(M/3)
     Lista=[]
     if positioning=="beginning":
@@ -179,26 +245,19 @@ def filter(List,positioning,M):
         return List
 
 
-def find_idxs(sequence, P=1, N=16, L=None,positioning="None"):
+def find_idxs(sequence,positioning="None"):
     """Parameters
     ----------
     sequence : np.array(M, n_features)
         Representation of the audio track on beats.
-    N : int > 0
-        Numnber of beats per subsequence.
-    L : int > 0 < N
-        Length of the shingles (If None, L = N / 4)
-
+    positioning:    string
+                    position weight(beginning,middle,end)
     Returns
     -------
-    idxs : list (len == P)
-        List of indeces
+    idx : list
+        List of most salient indeces
     """
-    assert len(sequence) >= P * N
-
     M = len(sequence)
-    if L is None:
-        L = int(N / 4)
     x=64
     while(x>=len(sequence)):
         x=x/2
@@ -210,13 +269,18 @@ def find_idxs(sequence, P=1, N=16, L=None,positioning="None"):
 
     return idx
 
-def find_idxs_chroma(sequence, P=1, N=16, L = None):
-    assert len(sequence) >= P * N
+def find_idxs_chroma(sequence):
+    """Parameters
+    ----------
+    sequence:   np.array
+                chroma featuress
+    Returns
+    ----------
+    idx:    List
+            List of most salient indeces based on melody patterns
+    """
 
     M = len(sequence)
-    if L is None:
-        L = int(N / 4)
-    cont=0
     patterns=chroma_exp.get_indeces(sequence)
     pattern_features=[]
     for i in patterns:
@@ -233,6 +297,15 @@ def find_idxs_chroma(sequence, P=1, N=16, L = None):
     return idx
 
 def subsequent_idxs(idxs):
+    """Parameters
+    ----------
+    idxs:   List
+            List of most salient indeces
+    Returns
+    ----------
+    [start,end]:    float array
+                    start and end index to sample
+    """
     temp_start=idxs[0]
     end=0
     start=0
@@ -253,6 +326,16 @@ def subsequent_idxs(idxs):
     return [start,end]
 
 def synth_snippet(audio,beats,idxs,N):
+    """Parameters
+    ----------
+    audio:  audio file
+    beats:  time fo each given frame number
+    idxs:   most salient indeces
+    N:      number of beats per subsequence
+    Returns
+    ----------
+    subseq_audio:   sample timpes to render
+    """
     logging.info("Synthesizing snippet")
     sr=SAMPLING_RATE
     fade=2
@@ -290,6 +373,17 @@ def synth_snippet(audio,beats,idxs,N):
     return subseq_audio
 
 def generate_snippet(audio_file,positioning,N=16):
+    """Parameters
+    ----------
+    audio_file: audio file
+    positioning:    string
+                    position weight
+    N:          number of beats per subsequence
+    Returns
+    ----------
+    output: wav file
+            synthesized snippet
+    """
     features,audio= process_features(audio_file)
     features["bs_sequenceMFCC"]=librosa.util.sync(features["sequenceMFCC"].T,
                                               features["beats_idx"],
